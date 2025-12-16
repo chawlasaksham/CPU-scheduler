@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CPU Scheduling Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Plotly.js from CDN -->
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 20px; }
+    textarea { width: 100%; height: 120px; font-family: monospace; }
+    label { font-weight: bold; display:block; margin-top:10px; }
+    .grid { display: grid; grid-template-columns: 1fr 480px; gap: 20px; align-items:start; }
+    .card { padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa;}
+    #chart { width: 100%; height: 360px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 6px 8px; border: 1px solid #ddd; text-align:center; }
+    .small { font-size: 0.9rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h2>CPU Scheduling Simulator — Flask + Plotly</h2>
+  <p class="small">Input processes as CSV lines: <code>PID,arrival,burst,priority</code>. Priority is optional.</p>
+
+  <div class="grid">
+    <div class="card">
+      <form method="post" action="{{ url_for('simulate') }}">
+        <label for="processes">Processes (one per line)</label>
+        <textarea name="processes" id="processes">{{ example }}</textarea>
+
+        <label for="algorithm">Algorithm</label>
+        <select name="algorithm" id="algorithm">
+          <option value="fcfs" {% if chosen_algorithm=='fcfs' %}selected{% endif %}>FCFS</option>
+          <option value="sjf-np" {% if chosen_algorithm=='sjf-np' %}selected{% endif %}>SJF (Non-preemptive)</option>
+          <option value="sjf-p" {% if chosen_algorithm=='sjf-p' %}selected{% endif %}>SJF (Preemptive)</option>
+          <option value="rr" {% if chosen_algorithm=='rr' %}selected{% endif %}>Round Robin</option>
+          <option value="priority-np" {% if chosen_algorithm=='priority-np' %}selected{% endif %}>Priority (Non-preemptive)</option>
+          <option value="priority-p" {% if chosen_algorithm=='priority-p' %}selected{% endif %}>Priority (Preemptive)</option>
+        </select>
+
+        <label for="quantum">Time Quantum (for Round Robin)</label>
+        <input type="number" name="quantum" id="quantum" value="{{ quantum if quantum is defined else 2 }}" min="1">
+
+        <div style="margin-top:12px;">
+          <button type="submit">Simulate</button>
+        </div>
+      </form>
+
+      {% if rows is defined %}
+      <hr>
+      <h4>Metrics</h4>
+      <table>
+        <thead><tr><th>PID</th><th>Arrival</th><th>Burst</th><th>Start</th><th>Completion</th><th>TAT</th><th>WT</th><th>RT</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.pid }}</td>
+            <td>{{ r.arrival }}</td>
+            <td>{{ r.burst }}</td>
+            <td>{% if r.start is not none %}{{ r.start }}{% else %}-{% endif %}</td>
+            <td>{% if r.completion is not none %}{{ r.completion }}{% else %}-{% endif %}</td>
+            <td>{% if r.TAT is not none %}{{ r.TAT }}{% else %}-{% endif %}</td>
+            <td>{% if r.WT is not none %}{{ r.WT }}{% else %}-{% endif %}</td>
+            <td>{% if r.RT is not none %}{{ r.RT }}{% else %}-{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <p class="small">
+        Averages — TAT: <strong>{{ avgs.avg_tat|round(3) if avgs.avg_tat is not none else '-' }}</strong>,
+        WT: <strong>{{ avgs.avg_wt|round(3) if avgs.avg_wt is not none else '-' }}</strong>,
+        RT: <strong>{{ avgs.avg_rt|round(3) if avgs.avg_rt is not none else '-' }}</strong>
+      </p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h4>Gantt Chart</h4>
+      <div id="chart"></div>
+      <p class="small">Hover a bar to see details. Zoom and pan are supported.</p>
+    </div>
+  </div>
+
+  <script>
+    // Read gantt data injected by Flask (if present)
+    var gantt_json = {{ gantt_json|safe if gantt_json is defined else 'null' }};
+
+    function drawGantt(gantt) {
+      var tasks = [];
+      // transform to Plotly bar segments (one bar per PID aggregated)
+      // We'll draw each gantt segment as a separate trace so hover shows start/end
+      var traces = [];
+      var y = [];
+      for (var i=0;i<gantt.length;i++){
+        var seg = gantt[i];
+        var pid = seg.pid;
+        var start = seg.start;
+        var end = seg.end;
+        traces.push({
+          x: [end - start],
+          y: [pid],
+          base: [start],
+          type: 'bar',
+          orientation: 'h',
+          name: pid,
+          hovertemplate: pid + '<br>Start: ' + start + '<br>End: ' + end + '<extra></extra>',
+          showlegend: false
+        });
+      }
+
+      var layout = {
+        barmode: 'stack',
+        title: '',
+        xaxis: { title: 'Time', automargin: true },
+        height: 100 + gantt.length * 20,
+        margin: {l:80, r:20, t:20, b:40}
+      };
+
+      Plotly.newPlot('chart', traces, layout, {responsive: true});
+    }
+
+    if (gantt_json) {
+      drawGantt(gantt_json);
+    } else {
+      // draw empty chart placeholder
+      document.getElementById('chart').innerHTML = "<p class='small'>Run a simulation to see the interactive Gantt chart here.</p>";
+    }
+  </script>
+</body>
+</html>
