@@ -2,8 +2,8 @@
 
 A web-based **CPU Scheduling Algorithm Simulator** developed using **Python Flask**.  
 The application allows users to simulate and analyze different CPU scheduling algorithms, visualize execution through a **Gantt Chart**, and evaluate performance metrics.
-
 ---
+deployed on render [(https://cpu-scheduler-851d.onrender.com/)]
 
 ## 📌 Project Overview
 
